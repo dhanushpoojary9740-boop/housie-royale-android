@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "563154399982",
+    "firebase_url": "https://housie-royale-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "housie-royale",
+    "storage_bucket": "housie-royale.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:563154399982:android:0fab321a2d53edc493f9ff",
+        "android_client_info": {
+          "package_name": "com.houseroyale.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqSnyXmC8AYO92WNCFxKjk1nMg4VroaBE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
