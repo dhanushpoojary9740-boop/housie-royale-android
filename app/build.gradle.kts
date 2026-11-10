@@ -34,7 +34,7 @@ android {
 
 dependencies {
     implementation(platform(
-        "androidx.compose:compose-bom:2026.09.00"
+"androidx.compose:compose-bom:2025.11.00"
     ))
 
     implementation("androidx.activity:activity-compose:1.11.0")
