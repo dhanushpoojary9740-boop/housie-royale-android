@@ -51,24 +51,45 @@ fun HousieRoyaleApp() {
     var playerName by remember { mutableStateOf("") }
     var gameCode by remember { mutableStateOf("") }
 
-    var ticket by remember {
-        mutableStateOf(TambolaGameEngine.generateTicket())
+    var bundleSize by remember { mutableIntStateOf(1) }
+
+    var tickets by remember {
+        mutableStateOf(TambolaGameEngine.generateTickets(1))
+    }
+
+    var selectedTicketIndex by remember {
+        mutableIntStateOf(0)
+    }
+
+    var favouriteTickets by remember {
+        mutableStateOf(setOf<Int>())
     }
 
     val calledNumbers = remember {
         mutableStateListOf<Int>()
     }
 
+    val currentTicket = tickets[selectedTicketIndex]
+
     val completedPatterns =
         TambolaGameEngine.completedPatterns(
-            ticket,
+            currentTicket,
             calledNumbers.toSet()
         )
 
-    fun startOfflineGame() {
+    fun startNewGame(size: Int = bundleSize) {
+        bundleSize = size
+        tickets = TambolaGameEngine.generateTickets(size)
+        selectedTicketIndex = 0
+        favouriteTickets = emptySet()
         calledNumbers.clear()
-        ticket = TambolaGameEngine.generateTicket()
         screen = AppScreen.GAME
+    }
+
+    fun changeBundle(size: Int) {
+        if (size != bundleSize) {
+            startNewGame(size)
+        }
     }
 
     Box(
@@ -118,15 +139,6 @@ fun HousieRoyaleApp() {
                         letterSpacing = 2.sp
                     )
 
-                    Spacer(Modifier.height(10.dp))
-
-                    Text(
-                        "THE ROYAL TAMBOLA EXPERIENCE",
-                        color = SoftWhite,
-                        fontSize = 12.sp,
-                        letterSpacing = 1.sp
-                    )
-
                     Spacer(Modifier.height(35.dp))
 
                     NeonCard {
@@ -153,12 +165,45 @@ fun HousieRoyaleApp() {
 
                         Spacer(Modifier.height(24.dp))
 
+                        Text(
+                            "CHOOSE YOUR TICKET BUNDLE",
+                            color = NeonBlue,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(1, 6, 12).forEach { size ->
+                                Button(
+                                    onClick = {
+                                        bundleSize = size
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor =
+                                            if (bundleSize == size)
+                                                NeonPurple
+                                            else Color(0xFF252C4A),
+                                        contentColor = SoftWhite
+                                    )
+                                ) {
+                                    Text("${size}x")
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(22.dp))
+
                         NeonButton(
                             text = "🎮  PLAY OFFLINE",
                             color = NeonPurple,
                             enabled = playerName.isNotBlank()
                         ) {
-                            startOfflineGame()
+                            startNewGame(bundleSize)
                         }
 
                         Spacer(Modifier.height(14.dp))
@@ -178,11 +223,8 @@ fun HousieRoyaleApp() {
                         "✨ PLAY  •  WIN  •  CELEBRATE ✨",
                         color = NeonGold,
                         fontSize = 12.sp,
-                        letterSpacing = 2.sp,
-                        textAlign = TextAlign.Center
+                        letterSpacing = 2.sp
                     )
-
-                    Spacer(Modifier.height(30.dp))
                 }
             }
 
@@ -292,7 +334,7 @@ fun HousieRoyaleApp() {
                         fontSize = 14.sp
                     )
 
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(15.dp))
 
                     NeonCard {
 
@@ -338,11 +380,57 @@ fun HousieRoyaleApp() {
                             text = "↻  NEW GAME",
                             color = NeonBlue
                         ) {
-                            startOfflineGame()
+                            startNewGame()
                         }
                     }
 
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(18.dp))
+
+                    NeonCard {
+
+                        Text(
+                            "TICKET BUNDLE",
+                            color = NeonGold,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(1, 6, 12).forEach { size ->
+                                Button(
+                                    onClick = {
+                                        changeBundle(size)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor =
+                                            if (bundleSize == size)
+                                                NeonPurple
+                                            else Color(0xFF252C4A),
+                                        contentColor = SoftWhite
+                                    )
+                                ) {
+                                    Text("${size}x")
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Text(
+                            "$bundleSize TICKETS IN THIS GAME",
+                            color = NeonBlue,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(Modifier.height(18.dp))
 
                     NeonCard {
 
@@ -353,7 +441,16 @@ fun HousieRoyaleApp() {
                             fontSize = 18.sp
                         )
 
-                        Spacer(Modifier.height(15.dp))
+                        Spacer(Modifier.height(12.dp))
+
+                        Text(
+                            "TICKET ${selectedTicketIndex + 1} OF ${tickets.size}",
+                            color = NeonBlue,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+
+                        Spacer(Modifier.height(12.dp))
 
                         ticket.forEach { row ->
 
@@ -385,7 +482,6 @@ fun HousieRoyaleApp() {
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
-
                                         Text(
                                             number?.toString() ?: "",
                                             color = if (wasCalled)
@@ -401,175 +497,58 @@ fun HousieRoyaleApp() {
                             Spacer(Modifier.height(5.dp))
                         }
 
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(14.dp))
 
                         Text(
                             "Green = Number Called",
                             color = NeonGreen,
                             fontSize = 12.sp
                         )
-                    }
 
-                    Spacer(Modifier.height(18.dp))
+                        Spacer(Modifier.height(15.dp))
 
-                    NeonCard {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
 
-                        Text(
-                            "🏆 WINNING CLAIMS",
-                            color = NeonGold,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        val patternLabels = listOf(
-                            WinningPattern.EARLY_FIVE to "Early Five",
-                            WinningPattern.TOP_LINE to "Top Line",
-                            WinningPattern.MIDDLE_LINE to "Middle Line",
-                            WinningPattern.BOTTOM_LINE to "Bottom Line",
-                            WinningPattern.FOUR_CORNERS to "Four Corners",
-                            WinningPattern.FULL_HOUSE to "Full House"
-                        )
-
-                        patternLabels.forEach { (pattern, label) ->
-
-                            val achieved = pattern in completedPatterns
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            OutlinedButton(
+                                onClick = {
+                                    if (selectedTicketIndex > 0) {
+                                        selectedTicketIndex--
+                                    }
+                                },
+                                enabled = selectedTicketIndex > 0
                             ) {
+                                Text("← PREVIOUS")
+                            }
 
-                                Text(
-                                    label,
-                                    color = if (achieved)
-                                        NeonGreen
-                                    else SoftWhite,
-                                    fontSize = 14.sp,
-                                    fontWeight = if (achieved)
-                                        FontWeight.Bold
-                                    else FontWeight.Normal
-                                )
-
-                                Text(
-                                    if (achieved) "🏆 WON" else "🔒",
-                                    color = if (achieved)
-                                        NeonGreen
-                                    else SoftWhite,
-                                    fontSize = 13.sp
-                                )
+                            OutlinedButton(
+                                onClick = {
+                                    if (selectedTicketIndex < tickets.lastIndex) {
+                                        selectedTicketIndex++
+                                    }
+                                },
+                                enabled = selectedTicketIndex < tickets.lastIndex
+                            ) {
+                                Text("NEXT →")
                             }
                         }
 
-                        if (completedPatterns.isNotEmpty()) {
-                            Spacer(Modifier.height(12.dp))
-
-                            Text(
-                                "CONGRATULATIONS, $playerName!",
-                                color = NeonGold,
-                                fontWeight = FontWeight.ExtraBold,
-                                textAlign = TextAlign.Center,
-                                fontSize = 16.sp
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(18.dp))
-
-                    NeonCard {
-
-                        Text(
-                            "CALLED NUMBER HISTORY",
-                            color = NeonBlue,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-
                         Spacer(Modifier.height(12.dp))
 
-                        Text(
-                            if (calledNumbers.isEmpty()) {
-                                "No numbers called yet"
-                            } else {
-                                calledNumbers.joinToString("  •  ")
-                            },
-                            color = SoftWhite,
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                        val isFavourite =
+                            selectedTicketIndex in favouriteTickets
 
-                    Spacer(Modifier.height(25.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun NeonCard(
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                1.dp,
-                NeonPurple.copy(alpha = 0.8f),
-                RoundedCornerShape(22.dp)
-            ),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Panel
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            content = content
-        )
-    }
-}
-
-@Composable
-fun NeonButton(
-    text: String,
-    color: Color,
-    enabled: Boolean = true,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(54.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = color,
-            contentColor = Background,
-            disabledContainerColor = Color.DarkGray
-        )
-    ) {
-        Text(
-            text,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 14.sp
-        )
-    }
-}
-
-@Composable
-fun neonFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = NeonBlue,
-    unfocusedBorderColor = NeonPurple,
-    focusedLabelColor = NeonBlue,
-    unfocusedLabelColor = SoftWhite,
-    focusedTextColor = SoftWhite,
-    unfocusedTextColor = SoftWhite,
-    cursorColor = NeonBlue
-)
+                        NeonButton(
+                            text = if (isFavourite)
+                                "★  REMOVE FAVOURITE"
+                            else
+                                "☆  ADD TO FAVOURITES",
+                            color = NeonGold
+                        ) {
+                            favouriteTickets =
+                                if (isFavourite) {
+                                    favouriteTickets - selectedTicketIndex
+ 
