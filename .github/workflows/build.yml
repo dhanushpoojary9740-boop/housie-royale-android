@@ -38,7 +38,7 @@ jobs:
             "build-tools;35.0.0"
 
       - name: Build APK
-        run: gradle assembleDebug --stacktrace
+  run: gradle :app:assembleDebug --stacktrace
 
       - name: Upload APK
         if: success()
