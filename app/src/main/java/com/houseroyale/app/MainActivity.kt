@@ -6,7 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,7 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.random.Random
 
 private val Background = Color(0xFF080B19)
 private val Panel = Color(0xFF151A32)
@@ -46,25 +44,6 @@ enum class AppScreen {
     HOME, ONLINE, GAME
 }
 
-fun generateTicket(): List<List<Int?>> {
-    val numbers = (1..90).shuffled().take(15).sorted()
-
-    return (0..2).map { row ->
-        val rowNumbers = numbers
-            .drop(row * 5)
-            .take(5)
-
-        val cells = MutableList<Int?>(9) { null }
-
-        rowNumbers.forEachIndexed { index, number ->
-            val column = index * 2
-            cells[column] = number
-        }
-
-        cells
-    }
-}
-
 @Composable
 fun HousieRoyaleApp() {
 
@@ -72,23 +51,23 @@ fun HousieRoyaleApp() {
     var playerName by remember { mutableStateOf("") }
     var gameCode by remember { mutableStateOf("") }
 
-    var ticket by remember { mutableStateOf(generateTicket()) }
+    var ticket by remember {
+        mutableStateOf(TambolaGameEngine.generateTicket())
+    }
 
     val calledNumbers = remember {
         mutableStateListOf<Int>()
     }
 
-    val availableNumbers = remember {
-        mutableStateListOf<Int>().apply {
-            addAll(1..90)
-        }
-    }
+    val completedPatterns =
+        TambolaGameEngine.completedPatterns(
+            ticket,
+            calledNumbers.toSet()
+        )
 
     fun startOfflineGame() {
         calledNumbers.clear()
-        availableNumbers.clear()
-        availableNumbers.addAll(1..90)
-        ticket = generateTicket()
+        ticket = TambolaGameEngine.generateTicket()
         screen = AppScreen.GAME
     }
 
@@ -105,6 +84,7 @@ fun HousieRoyaleApp() {
                 )
             )
     ) {
+
         when (screen) {
 
             AppScreen.HOME -> {
@@ -132,10 +112,10 @@ fun HousieRoyaleApp() {
                     )
 
                     Text(
-                        "VERSION 2.0",
+                        "VERSION 2.2 DEVELOPMENT",
                         color = NeonBlue,
-                        fontSize = 14.sp,
-                        letterSpacing = 5.sp
+                        fontSize = 13.sp,
+                        letterSpacing = 2.sp
                     )
 
                     Spacer(Modifier.height(10.dp))
@@ -240,8 +220,8 @@ fun HousieRoyaleApp() {
                         Spacer(Modifier.height(15.dp))
 
                         Text(
-                            "Online multiplayer connection will be configured " +
-                                "in the next development step.",
+                            "Online multiplayer connection is planned " +
+                                "for a future development stage.",
                             color = SoftWhite,
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center
@@ -343,11 +323,11 @@ fun HousieRoyaleApp() {
                         NeonButton(
                             text = "🎲  CALL NEXT NUMBER",
                             color = NeonPurple,
-                            enabled = availableNumbers.isNotEmpty()
+                            enabled = calledNumbers.size < 90
                         ) {
-                            if (availableNumbers.isNotEmpty()) {
-                                val next = availableNumbers.random()
-                                availableNumbers.remove(next)
+                            TambolaGameEngine.callNextNumber(
+                                calledNumbers.toSet()
+                            )?.let { next ->
                                 calledNumbers.add(next)
                             }
                         }
@@ -367,7 +347,7 @@ fun HousieRoyaleApp() {
                     NeonCard {
 
                         Text(
-                            "YOUR HOUSIE TICKET",
+                            "YOUR ROYAL TAMBOLA TICKET",
                             color = NeonGold,
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
@@ -386,7 +366,7 @@ fun HousieRoyaleApp() {
 
                                     val wasCalled =
                                         number != null &&
-                                            calledNumbers.contains(number)
+                                            number in calledNumbers
 
                                     Box(
                                         modifier = Modifier
@@ -428,6 +408,74 @@ fun HousieRoyaleApp() {
                             color = NeonGreen,
                             fontSize = 12.sp
                         )
+                    }
+
+                    Spacer(Modifier.height(18.dp))
+
+                    NeonCard {
+
+                        Text(
+                            "🏆 WINNING CLAIMS",
+                            color = NeonGold,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        val patternLabels = listOf(
+                            WinningPattern.EARLY_FIVE to "Early Five",
+                            WinningPattern.TOP_LINE to "Top Line",
+                            WinningPattern.MIDDLE_LINE to "Middle Line",
+                            WinningPattern.BOTTOM_LINE to "Bottom Line",
+                            WinningPattern.FOUR_CORNERS to "Four Corners",
+                            WinningPattern.FULL_HOUSE to "Full House"
+                        )
+
+                        patternLabels.forEach { (pattern, label) ->
+
+                            val achieved = pattern in completedPatterns
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+
+                                Text(
+                                    label,
+                                    color = if (achieved)
+                                        NeonGreen
+                                    else SoftWhite,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (achieved)
+                                        FontWeight.Bold
+                                    else FontWeight.Normal
+                                )
+
+                                Text(
+                                    if (achieved) "🏆 WON" else "🔒",
+                                    color = if (achieved)
+                                        NeonGreen
+                                    else SoftWhite,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+
+                        if (completedPatterns.isNotEmpty()) {
+                            Spacer(Modifier.height(12.dp))
+
+                            Text(
+                                "CONGRATULATIONS, $playerName!",
+                                color = NeonGold,
+                                fontWeight = FontWeight.ExtraBold,
+                                textAlign = TextAlign.Center,
+                                fontSize = 16.sp
+                            )
+                        }
                     }
 
                     Spacer(Modifier.height(18.dp))
