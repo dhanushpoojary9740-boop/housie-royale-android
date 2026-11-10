@@ -1,8 +1,6 @@
 
 package com.houseroyale.app
 
-import kotlin.random.Random
-
 typealias TambolaTicket = List<List<Int?>>
 
 enum class WinningPattern {
@@ -20,6 +18,8 @@ object TambolaGameEngine {
     private const val COLUMNS = 9
     private const val NUMBERS_PER_ROW = 5
     private const val TOTAL_NUMBERS = 15
+
+    val supportedBundleSizes = listOf(1, 6, 12)
 
     private fun columnRange(column: Int): IntRange {
         return when (column) {
@@ -74,6 +74,33 @@ object TambolaGameEngine {
                 return result
             }
         }
+    }
+
+    fun generateTickets(count: Int): List<TambolaTicket> {
+
+        require(count in supportedBundleSizes) {
+            "Bundle size must be 1, 6 or 12"
+        }
+
+        val tickets = mutableListOf<TambolaTicket>()
+        val signatures = mutableSetOf<String>()
+
+        while (tickets.size < count) {
+
+            val ticket = generateTicket()
+
+            val signature = ticket
+                .flatten()
+                .filterNotNull()
+                .sorted()
+                .joinToString(",")
+
+            if (signatures.add(signature)) {
+                tickets.add(ticket)
+            }
+        }
+
+        return tickets
     }
 
     fun isValidTicket(ticket: TambolaTicket): Boolean {
@@ -174,17 +201,12 @@ object TambolaGameEngine {
     fun getRemainingNumbers(
         calledNumbers: Set<Int>
     ): List<Int> {
-
-        return (1..90)
-            .filterNot { it in calledNumbers }
+        return (1..90).filterNot { it in calledNumbers }
     }
 
     fun callNextNumber(
         calledNumbers: Set<Int>
     ): Int? {
-
-        val remaining = getRemainingNumbers(calledNumbers)
-
-        return remaining.randomOrNull()
+        return getRemainingNumbers(calledNumbers).randomOrNull()
     }
 }
