@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.houseroyale.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.houseroyale.app"
