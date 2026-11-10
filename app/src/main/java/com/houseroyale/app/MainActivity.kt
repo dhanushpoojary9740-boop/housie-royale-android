@@ -21,9 +21,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.draw.clip
-import androidx.compose.runtime.DisposableEffect
 
 private val Background = Color(0xFF080B19)
 private val Panel = Color(0xFF151A32)
@@ -71,6 +68,12 @@ fun HousieRoyaleApp() {
     var soundEnabled by remember { mutableStateOf(true) }
     var speechRate by remember { mutableFloatStateOf(1.0f) }
 
+    var celebrationMessage by remember { mutableStateOf<String?>(null) }
+
+    val announcedWins = remember {
+        mutableStateOf(setOf<String>())
+    }
+
     val caller = remember(context) {
         SmartNumberCaller(context) { ready ->
             voiceReady = ready
@@ -94,12 +97,43 @@ fun HousieRoyaleApp() {
     val currentTicket = tickets.getOrNull(selectedTicketIndex)
         ?: tickets.first()
 
-    val completedPatterns = remember(currentTicket, calledNumbers.size) {
-        TambolaGameEngine.completedPatterns(
-            currentTicket,
-            calledNumbers.toSet()
+    val calledSet = calledNumbers.toSet()
+
+    // Check every ticket whenever the called-number list changes.
+    val winningResults = remember(tickets, calledNumbers.size) {
+        TambolaGameEngine.getAllTicketWinningResults(
+            tickets,
+            calledSet
         )
     }
+
+    // Detect newly completed winning patterns and celebrate them.
+    LaunchedEffect(winningResults) {
+        val newWins = winningResults.flatMap { result ->
+            result.completedPatterns.map { pattern ->
+                Triple(result.ticketIndex, pattern, "${result.ticketIndex}_${pattern.name}")
+            }
+        }.filter { (_, _, key) ->
+            key !in announcedWins.value
+        }
+
+        if (newWins.isNotEmpty()) {
+            announcedWins.value = announcedWins.value +
+                newWins.map { it.third }
+
+            val firstWin = newWins.first()
+            val ticketNumber = firstWin.first + 1
+            val patternName = firstWin.second.name.replace('_', ' ')
+
+            celebrationMessage =
+                "Ticket $ticketNumber completed $patternName!"
+        }
+    }
+
+    val currentTicketPatterns = winningResults
+        .firstOrNull { it.ticketIndex == selectedTicketIndex }
+        ?.completedPatterns
+        ?: emptySet()
 
     fun startNewGame(size: Int = bundleSize) {
         bundleSize = size
@@ -107,6 +141,8 @@ fun HousieRoyaleApp() {
         selectedTicketIndex = 0
         favouriteTickets = emptySet()
         calledNumbers.clear()
+        announcedWins.value = emptySet()
+        celebrationMessage = null
         caller.stopAnnouncement()
         screen = AppScreen.GAME
     }
@@ -166,7 +202,7 @@ fun HousieRoyaleApp() {
                     )
 
                     Text(
-                        "VERSION 2.3",
+                        "VERSION 2.4",
                         color = NeonBlue,
                         fontSize = 13.sp,
                         letterSpacing = 2.sp
@@ -333,7 +369,6 @@ fun HousieRoyaleApp() {
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -608,7 +643,7 @@ fun HousieRoyaleApp() {
                             ) {
                                 row.forEach { number ->
                                     val wasCalled =
-                                        number != null && number in calledNumbers
+                                        number != null && number in calledSet
 
                                     Box(
                                         modifier = Modifier
@@ -708,9 +743,52 @@ fun HousieRoyaleApp() {
 
                     Spacer(Modifier.height(18.dp))
 
+                    // All-ticket winning summary.
                     NeonCard {
                         Text(
-                            "WINNING CLAIMS",
+                            "ALL TICKET WINNING RESULTS",
+                            color = NeonGold,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        if (winningResults.isEmpty()) {
+                            Text(
+                                "No winning pattern completed yet.",
+                                color = SoftWhite,
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        } else {
+                            winningResults.forEach { result ->
+                                Text(
+                                    "🎟 TICKET ${result.ticketIndex + 1}",
+                                    color = NeonBlue,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 10.dp)
+                                )
+
+                                result.completedPatterns.forEach { pattern ->
+                                    Text(
+                                        "🏆 ${pattern.name.replace('_', ' ')}",
+                                        color = NeonGreen,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(vertical = 3.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(18.dp))
+
+                    // Selected ticket claim validation.
+                    NeonCard {
+                        Text(
+                            "SELECTED TICKET CLAIMS",
                             color = NeonGold,
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
@@ -718,17 +796,29 @@ fun HousieRoyaleApp() {
 
                         Spacer(Modifier.height(10.dp))
 
-                        if (completedPatterns.isEmpty()) {
+                        if (currentTicketPatterns.isEmpty()) {
                             Text(
-                                "No winning pattern completed on this ticket yet.",
+                                "No winning pattern completed on Ticket ${selectedTicketIndex + 1}.",
                                 color = SoftWhite,
-                                fontSize = 13.sp
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
                             )
                         } else {
-                            completedPatterns.forEach { pattern ->
+                            currentTicketPatterns.forEach { pattern ->
+                                val isValid = TambolaGameEngine.validateBundleClaim(
+                                    tickets = tickets,
+                                    ticketIndex = selectedTicketIndex,
+                                    pattern = pattern,
+                                    calledNumbers = calledSet
+                                )
+
                                 Text(
-                                    "🏆 ${pattern.name.replace('_', ' ')}",
-                                    color = NeonGreen,
+                                    if (isValid) {
+                                        "✅ ${pattern.name.replace('_', ' ')} — VALID"
+                                    } else {
+                                        "❌ ${pattern.name.replace('_', ' ')} — INVALID"
+                                    },
+                                    color = if (isValid) NeonGreen else Color.Red,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 )
@@ -765,6 +855,41 @@ fun HousieRoyaleApp() {
                     Spacer(Modifier.height(24.dp))
                 }
             }
+        }
+
+        // Victory celebration dialog.
+        if (celebrationMessage != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    celebrationMessage = null
+                },
+                containerColor = Panel,
+                title = {
+                    Text(
+                        "🏆 ROYALE VICTORY!",
+                        color = NeonGold,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center
+                    )
+                },
+                text = {
+                    Text(
+                        celebrationMessage ?: "",
+                        color = SoftWhite,
+                        textAlign = TextAlign.Center,
+                        fontSize = 17.sp
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            celebrationMessage = null
+                        }
+                    ) {
+                        Text("CONTINUE", color = NeonBlue)
+                    }
+                }
+            )
         }
     }
 }
