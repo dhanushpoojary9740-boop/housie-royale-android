@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class AppScreen {
+private enum class AppScreen {
     HOME, ONLINE, GAME
 }
 
@@ -71,11 +71,15 @@ fun HousieRoyaleApp() {
 
     val currentTicket = tickets[selectedTicketIndex]
 
-    val completedPatterns =
+    val completedPatterns = remember(
+        currentTicket,
+        calledNumbers.size
+    ) {
         TambolaGameEngine.completedPatterns(
             currentTicket,
             calledNumbers.toSet()
         )
+    }
 
     fun startNewGame(size: Int = bundleSize) {
         bundleSize = size
@@ -92,6 +96,26 @@ fun HousieRoyaleApp() {
         }
     }
 
+    fun toggleFavourite() {
+        favouriteTickets =
+            if (selectedTicketIndex in favouriteTickets) {
+                favouriteTickets - selectedTicketIndex
+            } else {
+                favouriteTickets + selectedTicketIndex
+            }
+    }
+
+    fun openNextFavourite() {
+        val next = favouriteTickets
+            .filter { it > selectedTicketIndex }
+            .minOrNull()
+            ?: favouriteTickets.minOrNull()
+
+        if (next != null) {
+            selectedTicketIndex = next
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -105,11 +129,9 @@ fun HousieRoyaleApp() {
                 )
             )
     ) {
-
         when (screen) {
 
             AppScreen.HOME -> {
-
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -118,8 +140,7 @@ fun HousieRoyaleApp() {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-
-                    Spacer(Modifier.height(35.dp))
+                    Spacer(Modifier.height(25.dp))
 
                     Text("👑", fontSize = 65.sp)
 
@@ -133,16 +154,15 @@ fun HousieRoyaleApp() {
                     )
 
                     Text(
-                        "VERSION 2.2 DEVELOPMENT",
+                        "VERSION 2.2",
                         color = NeonBlue,
                         fontSize = 13.sp,
                         letterSpacing = 2.sp
                     )
 
-                    Spacer(Modifier.height(35.dp))
+                    Spacer(Modifier.height(30.dp))
 
                     NeonCard {
-
                         Text(
                             "WELCOME, PLAYER!",
                             color = NeonGold,
@@ -163,7 +183,7 @@ fun HousieRoyaleApp() {
                             colors = neonFieldColors()
                         )
 
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(22.dp))
 
                         Text(
                             "CHOOSE YOUR TICKET BUNDLE",
@@ -206,7 +226,7 @@ fun HousieRoyaleApp() {
                             startNewGame(bundleSize)
                         }
 
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(12.dp))
 
                         NeonButton(
                             text = "🌐  PLAY ONLINE",
@@ -229,7 +249,6 @@ fun HousieRoyaleApp() {
             }
 
             AppScreen.ONLINE -> {
-
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -238,7 +257,6 @@ fun HousieRoyaleApp() {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-
                     Text("🌐", fontSize = 55.sp)
 
                     Text(
@@ -251,7 +269,6 @@ fun HousieRoyaleApp() {
                     Spacer(Modifier.height(25.dp))
 
                     NeonCard {
-
                         Text(
                             "CREATE OR JOIN A GAME",
                             color = NeonGold,
@@ -262,8 +279,8 @@ fun HousieRoyaleApp() {
                         Spacer(Modifier.height(15.dp))
 
                         Text(
-                            "Online multiplayer connection is planned " +
-                                "for a future development stage.",
+                            "Online multiplayer is not connected yet. " +
+                                "This feature will be implemented in a later stage.",
                             color = SoftWhite,
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center
@@ -297,7 +314,6 @@ fun HousieRoyaleApp() {
             }
 
             AppScreen.GAME -> {
-
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -305,13 +321,11 @@ fun HousieRoyaleApp() {
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-
                         Text(
                             "👑 ROYALE GAME",
                             color = NeonGold,
@@ -337,7 +351,6 @@ fun HousieRoyaleApp() {
                     Spacer(Modifier.height(15.dp))
 
                     NeonCard {
-
                         Text(
                             "NUMBER CALLER",
                             color = NeonBlue,
@@ -387,7 +400,6 @@ fun HousieRoyaleApp() {
                     Spacer(Modifier.height(18.dp))
 
                     NeonCard {
-
                         Text(
                             "TICKET BUNDLE",
                             color = NeonGold,
@@ -433,7 +445,6 @@ fun HousieRoyaleApp() {
                     Spacer(Modifier.height(18.dp))
 
                     NeonCard {
-
                         Text(
                             "YOUR ROYAL TAMBOLA TICKET",
                             color = NeonGold,
@@ -452,15 +463,12 @@ fun HousieRoyaleApp() {
 
                         Spacer(Modifier.height(12.dp))
 
-                        ticket.forEach { row ->
-
+                        currentTicket.forEach { row ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
-
                                 row.forEach { number ->
-
                                     val wasCalled =
                                         number != null &&
                                             number in calledNumbers
@@ -470,13 +478,15 @@ fun HousieRoyaleApp() {
                                             .weight(1f)
                                             .aspectRatio(0.85f)
                                             .background(
-                                                if (wasCalled) NeonGreen
+                                                if (wasCalled)
+                                                    NeonGreen
                                                 else Color(0xFF252C4A),
                                                 RoundedCornerShape(5.dp)
                                             )
                                             .border(
                                                 1.dp,
-                                                if (wasCalled) NeonGreen
+                                                if (wasCalled)
+                                                    NeonGreen
                                                 else NeonPurple.copy(alpha = 0.6f),
                                                 RoundedCornerShape(5.dp)
                                             ),
@@ -512,7 +522,6 @@ fun HousieRoyaleApp() {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-
                             OutlinedButton(
                                 onClick = {
                                     if (selectedTicketIndex > 0) {
@@ -532,23 +541,4 @@ fun HousieRoyaleApp() {
                                 },
                                 enabled = selectedTicketIndex < tickets.lastIndex
                             ) {
-                                Text("NEXT →")
-                            }
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        val isFavourite =
-                            selectedTicketIndex in favouriteTickets
-
-                        NeonButton(
-                            text = if (isFavourite)
-                                "★  REMOVE FAVOURITE"
-                            else
-                                "☆  ADD TO FAVOURITES",
-                            color = NeonGold
-                        ) {
-                            favouriteTickets =
-                                if (isFavourite) {
-                                    favouriteTickets - selectedTicketIndex
- 
+                               
