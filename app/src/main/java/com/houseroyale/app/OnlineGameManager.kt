@@ -1,4 +1,3 @@
-
 package com.houseroyale.app
 
 import com.google.firebase.auth.FirebaseAuth
@@ -7,19 +6,22 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
-import kotlin.random.Random
-
-data class OnlineRoom(
-    val roomId: String,
-    val roomCode: String,
-    val hostUid: String,
-    val status: String
-)
+import java.security.SecureRandom
 
 data class OnlinePlayer(
-    val uid: String,
+    val id: String,
     val name: String,
     val isHost: Boolean
+)
+
+data class OnlineRoomState(
+    val roomId: String = "",
+    val code: String = "",
+    val hostId: String = "",
+    val status: String = "lobby",
+    val players: List<OnlinePlayer> = emptyList(),
+    val calledNumbers: List<Int> = emptyList(),
+    val tickets: Map<String, List<List<Int>>> = emptyMap()
 )
 
 class OnlineGameManager {
@@ -28,577 +30,476 @@ class OnlineGameManager {
 
     private val database = FirebaseDatabase.getInstance(
         "https://housie-royale-default-rtdb.asia-southeast1.firebasedatabase.app"
-    ).reference
+    )
+
+    private val root = database.reference
 
     private var roomListener: ValueEventListener? = null
-    private var playersListener: ValueEventListener? = null
-    private var numbersListener: ValueEventListener? = null
+    private var roomReference: DatabaseReference? = null
 
-    private var activeRoomId: String? = null
-
-    fun getCurrentPlayerId(): String? {
-        return auth.currentUser?.uid
-    }
+    val playerId: String?
+        get() = auth.currentUser?.uid
 
     fun signIn(
-        callback: (Result<String>) -> Unit
+        onResult: (Boolean, String) -> Unit
     ) {
-        val currentUser = auth.currentUser
-
-        if (currentUser != null) {
-            callback(Result.success(currentUser.uid))
+        if (auth.currentUser != null) {
+            onResult(true, auth.currentUser!!.uid)
             return
         }
 
         auth.signInAnonymously()
-            .addOnSuccessListener { result ->
-                val uid = result.user?.uid
-
-                if (uid != null) {
-                    callback(Result.success(uid))
-                } else {
-                    callback(
-                        Result.failure(
-                            Exception("Unable to get player ID")
-                        )
-                    )
-                }
+            .addOnSuccessListener {
+                onResult(true, it.user?.uid ?: "")
             }
-            .addOnFailureListener { error ->
-                callback(Result.failure(error))
+            .addOnFailureListener {
+                onResult(false, it.message ?: "Anonymous sign-in failed")
             }
     }
 
     fun createRoom(
         playerName: String,
-        callback: (Result<OnlineRoom>) -> Unit
+        tickets: List<TambolaTicket>,
+        onResult: (Boolean, String) -> Unit
     ) {
-        if (playerName.isBlank()) {
-            callback(
-                Result.failure(
-                    Exception("Enter your player name")
-                )
-            )
+        val uid = playerId
+
+        if (uid == null) {
+            onResult(false, "Please sign in first.")
             return
         }
 
-        signIn { authResult ->
+        val roomId = root.child("rooms").push().key
 
-            authResult.onFailure {
-                callback(Result.failure(it))
-            }
+        if (roomId == null) {
+            onResult(false, "Could not create a room.")
+            return
+        }
 
-            authResult.onSuccess { uid ->
+        val code = generateRoomCode()
 
-                val roomRef = database
-                    .child("rooms")
-                    .push()
+        val roomReference = root.child("rooms").child(roomId)
 
-                val roomId = roomRef.key
+        val meta = mapOf(
+            "hostId" to uid,
+            "hostName" to playerName,
+            "status" to "lobby",
+            "createdAt" to System.currentTimeMillis()
+        )
 
-                if (roomId == null) {
-                    callback(
-                        Result.failure(
-                            Exception("Unable to create room ID")
-                        )
-                    )
-                    return@onSuccess
-                }
+        val player = mapOf(
+            "name" to playerName,
+            "joinedAt" to System.currentTimeMillis()
+        )
 
-                val meta = mapOf(
-                    "hostUid" to uid,
-                    "status" to "waiting",
-                    "createdAt" to System.currentTimeMillis(),
-                    "maxPlayers" to 20
-                )
-
-                roomRef.child("meta")
-                    .setValue(meta)
-                    .addOnSuccessListener {
-
-                        val playerData = mapOf(
-                            "name" to playerName.trim(),
-                            "isHost" to true,
-                            "joinedAt" to System.currentTimeMillis()
-                        )
-
-                        roomRef.child("players")
-                            .child(uid)
-                            .setValue(playerData)
-                            .addOnSuccessListener {
-
-                                createRoomCode(
-                                    roomId = roomId,
-                                    hostUid = uid,
-                                    callback = callback
-                                )
-                            }
-                            .addOnFailureListener {
-                                callback(Result.failure(it))
-                            }
-                    }
-                    .addOnFailureListener {
-                        callback(Result.failure(it))
-                    }
+        val ticketData = tickets.map { ticket ->
+            ticket.map { row ->
+                row.map { number -> number ?: 0 }
             }
         }
-    }
 
-    private fun createRoomCode(
-        roomId: String,
-        hostUid: String,
-        callback: (Result<OnlineRoom>) -> Unit
-    ) {
-        val code = Random.nextInt(100000, 1000000).toString()
+        roomReference.child("meta")
+            .setValue(meta)
+            .addOnSuccessListener {
 
-        val codeRef = database
-            .child("codes")
-            .child(code)
-
-        codeRef.get()
-            .addOnSuccessListener { snapshot ->
-
-                if (snapshot.exists()) {
-                    createRoomCode(
-                        roomId,
-                        hostUid,
-                        callback
-                    )
-                    return@addOnSuccess
-                }
-
-                val codeData = mapOf(
-                    "roomId" to roomId
-                )
-
-                codeRef.setValue(codeData)
+                roomReference.child("players")
+                    .child(uid)
+                    .setValue(player)
                     .addOnSuccessListener {
 
-                        activeRoomId = roomId
+                        roomReference.child("tickets")
+                            .child(uid)
+                            .setValue(ticketData)
+                            .addOnSuccessListener {
 
-                        callback(
-                            Result.success(
-                                OnlineRoom(
-                                    roomId = roomId,
-                                    roomCode = code,
-                                    hostUid = hostUid,
-                                    status = "waiting"
+                                root.child("codes")
+                                    .child(code)
+                                    .setValue(
+                                        mapOf("roomId" to roomId)
+                                    )
+                                    .addOnSuccessListener {
+                                        onResult(true, code)
+                                    }
+                                    .addOnFailureListener {
+                                        onResult(
+                                            false,
+                                            it.message ?: "Could not publish room code."
+                                        )
+                                    }
+                            }
+                            .addOnFailureListener {
+                                onResult(
+                                    false,
+                                    it.message ?: "Could not save host tickets."
                                 )
-                            )
-                        )
+                            }
                     }
                     .addOnFailureListener {
-                        callback(Result.failure(it))
+                        onResult(
+                            false,
+                            it.message ?: "Could not add host to room."
+                        )
                     }
             }
             .addOnFailureListener {
-                callback(Result.failure(it))
+                onResult(
+                    false,
+                    it.message ?: "Could not create room."
+                )
             }
     }
 
     fun joinRoom(
-        roomCode: String,
+        code: String,
         playerName: String,
-        callback: (Result<OnlineRoom>) -> Unit
+        tickets: List<TambolaTicket>,
+        onResult: (Boolean, String) -> Unit
     ) {
-        if (roomCode.length != 6 || !roomCode.all { it.isDigit() }) {
-            callback(
-                Result.failure(
-                    Exception("Enter a valid 6-digit room code")
-                )
-            )
+        val uid = playerId
+
+        if (uid == null) {
+            onResult(false, "Please sign in first.")
             return
         }
 
-        if (playerName.isBlank()) {
-            callback(
-                Result.failure(
-                    Exception("Enter your player name")
-                )
-            )
+        if (code.length != 6) {
+            onResult(false, "Enter a valid 6-digit room code.")
             return
         }
 
-        signIn { authResult ->
+        root.child("codes")
+            .child(code)
+            .get()
+            .addOnSuccessListener { codeSnapshot ->
 
-            authResult.onFailure {
-                callback(Result.failure(it))
-            }
+                val roomId = codeSnapshot.child("roomId")
+                    .getValue(String::class.java)
 
-            authResult.onSuccess { uid ->
+                if (roomId.isNullOrBlank()) {
+                    onResult(false, "Room code not found.")
+                    return@addOnSuccessListener
+                }
 
-                database.child("codes")
-                    .child(roomCode)
+                val roomReference = root.child("rooms").child(roomId)
+
+                roomReference.child("meta")
                     .get()
-                    .addOnSuccessListener { codeSnapshot ->
+                    .addOnSuccessListener { meta ->
 
-                        if (!codeSnapshot.exists()) {
-                            callback(
-                                Result.failure(
-                                    Exception("Room code not found")
-                                )
-                            )
-                            return@addOnSuccess
+                        val status = meta.child("status")
+                            .getValue(String::class.java) ?: "lobby"
+
+                        if (status != "lobby" && status != "playing") {
+                            onResult(false, "This game is no longer available.")
+                            return@addOnSuccessListener
                         }
 
-                        val roomId = codeSnapshot
-                            .child("roomId")
-                            .getValue(String::class.java)
+                        val player = mapOf(
+                            "name" to playerName,
+                            "joinedAt" to System.currentTimeMillis()
+                        )
 
-                        if (roomId.isNullOrBlank()) {
-                            callback(
-                                Result.failure(
-                                    Exception("Invalid room information")
-                                )
-                            )
-                            return@addOnSuccess
-                        }
+                        roomReference.child("players")
+                            .child(uid)
+                            .setValue(player)
+                            .addOnSuccessListener {
 
-                        val roomRef = database
-                            .child("rooms")
-                            .child(roomId)
-
-                        roomRef.child("meta")
-                            .get()
-                            .addOnSuccessListener { metaSnapshot ->
-
-                                val hostUid = metaSnapshot
-                                    .child("hostUid")
-                                    .getValue(String::class.java)
-
-                                val status = metaSnapshot
-                                    .child("status")
-                                    .getValue(String::class.java)
-
-                                if (hostUid == null || status != "waiting") {
-                                    callback(
-                                        Result.failure(
-                                            Exception("This room is not accepting players")
-                                        )
-                                    )
-                                    return@addOnSuccessListener
+                                val ticketData = tickets.map { ticket ->
+                                    ticket.map { row ->
+                                        row.map { number -> number ?: 0 }
+                                    }
                                 }
 
-                                val playerData = mapOf(
-                                    "name" to playerName.trim(),
-                                    "isHost" to false,
-                                    "joinedAt" to System.currentTimeMillis()
-                                )
-
-                                roomRef.child("players")
+                                roomReference.child("tickets")
                                     .child(uid)
-                                    .setValue(playerData)
+                                    .setValue(ticketData)
                                     .addOnSuccessListener {
-
-                                        activeRoomId = roomId
-
-                                        callback(
-                                            Result.success(
-                                                OnlineRoom(
-                                                    roomId = roomId,
-                                                    roomCode = roomCode,
-                                                    hostUid = hostUid,
-                                                    status = status
-                                                )
-                                            )
-                                        )
+                                        onResult(true, roomId)
                                     }
                                     .addOnFailureListener {
-                                        callback(Result.failure(it))
+                                        onResult(
+                                            false,
+                                            it.message ?: "Could not save your tickets."
+                                        )
                                     }
                             }
                             .addOnFailureListener {
-                                callback(Result.failure(it))
+                                onResult(
+                                    false,
+                                    it.message ?: "Could not join room."
+                                )
                             }
                     }
                     .addOnFailureListener {
-                        callback(Result.failure(it))
+                        onResult(
+                            false,
+                            it.message ?: "Could not read room details."
+                        )
                     }
             }
-        }
-    }
-
-    fun listenToPlayers(
-        roomId: String,
-        callback: (List<OnlinePlayer>) -> Unit
-    ) {
-        removePlayersListener()
-
-        val ref = database
-            .child("rooms")
-            .child(roomId)
-            .child("players")
-
-        playersListener = object : ValueEventListener {
-
-            override fun onDataChange(snapshot: DataSnapshot) {
-
-                val players = snapshot.children.mapNotNull { child ->
-
-                    val uid = child.key ?: return@mapNotNull null
-
-                    val name = child.child("name")
-                        .getValue(String::class.java)
-                        ?: "Player"
-
-                    val isHost = child.child("isHost")
-                        .getValue(Boolean::class.java)
-                        ?: false
-
-                    OnlinePlayer(
-                        uid = uid,
-                        name = name,
-                        isHost = isHost
-                    )
-                }
-
-                callback(players)
+            .addOnFailureListener {
+                onResult(
+                    false,
+                    it.message ?: "Could not look up room code."
+                )
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                callback(emptyList())
-            }
-        }
-
-        ref.addValueEventListener(playersListener!!)
     }
 
     fun listenToRoom(
         roomId: String,
-        callback: (String) -> Unit
+        code: String,
+        onUpdate: (OnlineRoomState) -> Unit,
+        onError: (String) -> Unit
     ) {
-        removeRoomListener()
+        stopListening()
 
-        val ref = database
-            .child("rooms")
-            .child(roomId)
-            .child("meta")
-            .child("status")
+        val reference = root.child("rooms").child(roomId)
+        roomReference = reference
 
-        roomListener = object : ValueEventListener {
+        val listener = object : ValueEventListener {
 
             override fun onDataChange(snapshot: DataSnapshot) {
-                callback(
-                    snapshot.getValue(String::class.java) ?: "unknown"
+
+                val meta = snapshot.child("meta")
+
+                val hostId = meta.child("hostId")
+                    .getValue(String::class.java) ?: ""
+
+                val status = meta.child("status")
+                    .getValue(String::class.java) ?: "lobby"
+
+                val players = snapshot.child("players")
+                    .children
+                    .mapNotNull { playerSnapshot ->
+
+                        val id = playerSnapshot.key ?: return@mapNotNull null
+
+                        val name = playerSnapshot.child("name")
+                            .getValue(String::class.java) ?: "Player"
+
+                        OnlinePlayer(
+                            id = id,
+                            name = name,
+                            isHost = id == hostId
+                        )
+                    }
+
+                val calledNumbers = snapshot.child("calledNumbers")
+                    .children
+                    .mapNotNull {
+                        it.getValue(Int::class.java)
+                    }
+
+                val tickets = mutableMapOf<String, List<List<Int>>>()
+
+                snapshot.child("tickets").children.forEach { playerTickets ->
+
+                    val playerId = playerTickets.key ?: return@forEach
+
+                    val ticketList = playerTickets.children.map { ticketSnapshot ->
+
+                        ticketSnapshot.children.map { numberSnapshot ->
+                            numberSnapshot.getValue(Int::class.java) ?: 0
+                        }
+                    }
+
+                    tickets[playerId] = ticketList
+                }
+
+                onUpdate(
+                    OnlineRoomState(
+                        roomId = roomId,
+                        code = code,
+                        hostId = hostId,
+                        status = status,
+                        players = players,
+                        calledNumbers = calledNumbers,
+                        tickets = tickets
+                    )
                 )
             }
 
             override fun onCancelled(error: DatabaseError) {
-                callback("error")
+                onError(error.message)
             }
         }
 
-        ref.addValueEventListener(roomListener!!)
+        roomListener = listener
+        reference.addValueEventListener(listener)
     }
 
     fun startGame(
         roomId: String,
-        callback: (Result<Unit>) -> Unit
+        onResult: (Boolean, String) -> Unit
     ) {
-        val uid = auth.currentUser?.uid
+        val uid = playerId
 
         if (uid == null) {
-            callback(
-                Result.failure(
-                    Exception("Player is not signed in")
-                )
-            )
+            onResult(false, "Sign-in required.")
             return
         }
 
-        val metaRef = database
-            .child("rooms")
+        val meta = root.child("rooms")
             .child(roomId)
             .child("meta")
 
-        metaRef.child("hostUid")
+        meta.child("hostId")
             .get()
             .addOnSuccessListener { snapshot ->
 
-                val hostUid = snapshot.getValue(String::class.java)
-
-                if (hostUid != uid) {
-                    callback(
-                        Result.failure(
-                            Exception("Only the host can start the game")
-                        )
-                    )
+                if (snapshot.getValue(String::class.java) != uid) {
+                    onResult(false, "Only the host can start the game.")
                     return@addOnSuccessListener
                 }
 
-                metaRef.child("status")
+                meta.child("status")
                     .setValue("playing")
                     .addOnSuccessListener {
-                        callback(Result.success(Unit))
+                        onResult(true, "Game started.")
                     }
                     .addOnFailureListener {
-                        callback(Result.failure(it))
+                        onResult(false, it.message ?: "Could not start game.")
                     }
             }
             .addOnFailureListener {
-                callback(Result.failure(it))
+                onResult(false, it.message ?: "Could not verify host.")
             }
     }
 
     fun callNumber(
         roomId: String,
-        number: Int,
-        callback: (Result<Unit>) -> Unit
+        numbers: List<Int>,
+        onResult: (Boolean, String) -> Unit
     ) {
-        val uid = auth.currentUser?.uid
+        val uid = playerId
 
         if (uid == null) {
-            callback(
-                Result.failure(
-                    Exception("Player is not signed in")
-                )
-            )
+            onResult(false, "Sign-in required.")
             return
         }
 
-        if (number !in 1..90) {
-            callback(
-                Result.failure(
-                    Exception("Number must be between 1 and 90")
-                )
-            )
-            return
-        }
+        val meta = root.child("rooms").child(roomId).child("meta")
 
-        val metaRef = database
-            .child("rooms")
-            .child(roomId)
-            .child("meta")
-
-        metaRef.child("hostUid")
+        meta.child("hostId")
             .get()
             .addOnSuccessListener { snapshot ->
 
                 if (snapshot.getValue(String::class.java) != uid) {
-                    callback(
-                        Result.failure(
-                            Exception("Only the host can call numbers")
-                        )
-                    )
+                    onResult(false, "Only the host can call numbers.")
                     return@addOnSuccessListener
                 }
 
-                val numbersRef = database
-                    .child("rooms")
+                root.child("rooms")
                     .child(roomId)
                     .child("calledNumbers")
-
-                numbersRef.child(number.toString())
-                    .setValue(true)
+                    .setValue(numbers)
                     .addOnSuccessListener {
-                        callback(Result.success(Unit))
+                        onResult(true, "Number updated.")
                     }
                     .addOnFailureListener {
-                        callback(Result.failure(it))
+                        onResult(false, it.message ?: "Could not update number.")
                     }
             }
             .addOnFailureListener {
-                callback(Result.failure(it))
+                onResult(false, it.message ?: "Could not verify host.")
             }
     }
 
-    fun listenToCalledNumbers(
+    fun submitClaim(
         roomId: String,
-        callback: (Set<Int>) -> Unit
+        patternName: String,
+        ticketIndex: Int,
+        onResult: (Boolean, String) -> Unit
     ) {
-        removeNumbersListener()
+        val uid = playerId
 
-        val ref = database
-            .child("rooms")
-            .child(roomId)
-            .child("calledNumbers")
-
-        numbersListener = object : ValueEventListener {
-
-            override fun onDataChange(snapshot: DataSnapshot) {
-
-                val numbers = snapshot.children.mapNotNull { child ->
-                    child.key?.toIntOrNull()
-                }.toSet()
-
-                callback(numbers)
-            }
-
-            override fun onCancelled(error: DatabaseError) {
-                callback(emptySet())
-            }
+        if (uid == null) {
+            onResult(false, "Sign-in required.")
+            return
         }
 
-        ref.addValueEventListener(numbersListener!!)
+        val claimId = root.child("rooms")
+            .child(roomId)
+            .child("claims")
+            .child(uid)
+            .push()
+            .key
+
+        if (claimId == null) {
+            onResult(false, "Could not create claim.")
+            return
+        }
+
+        val claim = mapOf(
+            "pattern" to patternName,
+            "ticketIndex" to ticketIndex,
+            "playerId" to uid,
+            "createdAt" to System.currentTimeMillis(),
+            "status" to "pending"
+        )
+
+        root.child("rooms")
+            .child(roomId)
+            .child("claims")
+            .child(uid)
+            .child(claimId)
+            .setValue(claim)
+            .addOnSuccessListener {
+                onResult(true, "Claim submitted for verification.")
+            }
+            .addOnFailureListener {
+                onResult(false, it.message ?: "Could not submit claim.")
+            }
     }
 
     fun leaveRoom(
         roomId: String,
-        callback: (Result<Unit>) -> Unit
+        onResult: (Boolean, String) -> Unit
     ) {
-        val uid = auth.currentUser?.uid
+        val uid = playerId
 
         if (uid == null) {
-            callback(Result.success(Unit))
+            onResult(false, "Sign-in required.")
             return
         }
 
-        removeAllListeners()
+        val room = root.child("rooms").child(roomId)
 
-        database.child("rooms")
-            .child(roomId)
-            .child("players")
+        room.child("players")
             .child(uid)
             .removeValue()
             .addOnSuccessListener {
-                activeRoomId = null
-                callback(Result.success(Unit))
+
+                room.child("tickets")
+                    .child(uid)
+                    .removeValue()
+                    .addOnSuccessListener {
+                        stopListening()
+                        onResult(true, "You left the room.")
+                    }
+                    .addOnFailureListener {
+                        onResult(false, it.message ?: "Could not remove tickets.")
+                    }
             }
             .addOnFailureListener {
-                callback(Result.failure(it))
+                onResult(false, it.message ?: "Could not leave room.")
             }
     }
 
-    fun removeAllListeners() {
-        removePlayersListener()
-        removeRoomListener()
-        removeNumbersListener()
-    }
+    fun stopListening() {
+        val listener = roomListener
+        val reference = roomReference
 
-    private fun removePlayersListener() {
-        playersListener?.let {
-            activeRoomId?.let { roomId ->
-                database.child("rooms")
-                    .child(roomId)
-                    .child("players")
-                    .removeEventListener(it)
-            }
+        if (listener != null && reference != null) {
+            reference.removeEventListener(listener)
         }
-        playersListener = null
-    }
 
-    private fun removeRoomListener() {
-        roomListener?.let {
-            activeRoomId?.let { roomId ->
-                database.child("rooms")
-                    .child(roomId)
-                    .child("meta")
-                    .child("status")
-                    .removeEventListener(it)
-            }
-        }
         roomListener = null
+        roomReference = null
     }
 
-    private fun removeNumbersListener() {
-        numbersListener?.let {
-            activeRoomId?.let { roomId ->
-                database.child("rooms")
-                    .child(roomId)
-                    .child("calledNumbers")
-                    .removeEventListener(it)
-            }
-        }
-        numbersListener = null
+    private fun generateRoomCode(): String {
+        val random = SecureRandom()
+        return (100000 + random.nextInt(900000)).toString()
     }
 }
