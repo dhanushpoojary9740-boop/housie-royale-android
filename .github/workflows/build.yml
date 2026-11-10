@@ -44,6 +44,17 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release-key.jks"
           test -s "$RUNNER_TEMP/release-key.jks"
 
+      - name: Verify signing certificate fingerprint
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/release-key.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          keytool -list -v \
+            -keystore "$KEYSTORE_PATH" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS" | grep -i "SHA256:"
+
       - name: Build signed Release APK
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/release-key.jks
