@@ -1,3 +1,4 @@
+
 package com.houseroyale.app
 
 import android.os.Bundle
@@ -15,10 +16,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.DisposableEffect
 
 private val Background = Color(0xFF080B19)
 private val Panel = Color(0xFF151A32)
@@ -45,6 +50,8 @@ private enum class AppScreen {
 
 @Composable
 fun HousieRoyaleApp() {
+    val context = LocalContext.current
+
     var screen by remember { mutableStateOf(AppScreen.HOME) }
     var playerName by remember { mutableStateOf("") }
     var gameCode by remember { mutableStateOf("") }
@@ -53,15 +60,45 @@ fun HousieRoyaleApp() {
     var tickets by remember {
         mutableStateOf(TambolaGameEngine.generateTickets(1))
     }
+
     var selectedTicketIndex by remember { mutableIntStateOf(0) }
     var favouriteTickets by remember { mutableStateOf(setOf<Int>()) }
+
     val calledNumbers = remember { mutableStateListOf<Int>() }
+
+    var voiceEnabled by remember { mutableStateOf(true) }
+    var voiceReady by remember { mutableStateOf(false) }
+    var soundEnabled by remember { mutableStateOf(true) }
+    var speechRate by remember { mutableFloatStateOf(1.0f) }
+
+    val caller = remember(context) {
+        SmartNumberCaller(context) { ready ->
+            voiceReady = ready
+        }
+    }
+
+    DisposableEffect(caller) {
+        onDispose {
+            caller.release()
+        }
+    }
+
+    LaunchedEffect(speechRate) {
+        caller.setSpeechRate(speechRate)
+    }
+
+    LaunchedEffect(soundEnabled) {
+        caller.setSoundEnabled(soundEnabled)
+    }
 
     val currentTicket = tickets.getOrNull(selectedTicketIndex)
         ?: tickets.first()
 
     val completedPatterns = remember(currentTicket, calledNumbers.size) {
-        TambolaGameEngine.completedPatterns(currentTicket, calledNumbers.toSet())
+        TambolaGameEngine.completedPatterns(
+            currentTicket,
+            calledNumbers.toSet()
+        )
     }
 
     fun startNewGame(size: Int = bundleSize) {
@@ -70,6 +107,7 @@ fun HousieRoyaleApp() {
         selectedTicketIndex = 0
         favouriteTickets = emptySet()
         calledNumbers.clear()
+        caller.stopAnnouncement()
         screen = AppScreen.GAME
     }
 
@@ -87,7 +125,9 @@ fun HousieRoyaleApp() {
             .filter { it > selectedTicketIndex }
             .minOrNull() ?: favouriteTickets.minOrNull()
 
-        if (next != null) selectedTicketIndex = next
+        if (next != null) {
+            selectedTicketIndex = next
+        }
     }
 
     Box(
@@ -95,11 +135,16 @@ fun HousieRoyaleApp() {
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF11152D), Background, Color(0xFF160B29))
+                    listOf(
+                        Color(0xFF11152D),
+                        Background,
+                        Color(0xFF160B29)
+                    )
                 )
             )
     ) {
         when (screen) {
+
             AppScreen.HOME -> {
                 Column(
                     modifier = Modifier
@@ -110,6 +155,7 @@ fun HousieRoyaleApp() {
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text("👑", fontSize = 65.sp)
+
                     Text(
                         "HOUSIE ROYALE",
                         color = NeonGold,
@@ -118,12 +164,14 @@ fun HousieRoyaleApp() {
                         letterSpacing = 2.sp,
                         textAlign = TextAlign.Center
                     )
+
                     Text(
-                        "VERSION 2.2",
+                        "VERSION 2.3",
                         color = NeonBlue,
                         fontSize = 13.sp,
                         letterSpacing = 2.sp
                     )
+
                     Spacer(Modifier.height(30.dp))
 
                     NeonCard {
@@ -133,36 +181,47 @@ fun HousieRoyaleApp() {
                             fontSize = 21.sp,
                             fontWeight = FontWeight.Bold
                         )
+
                         Spacer(Modifier.height(18.dp))
+
                         OutlinedTextField(
                             value = playerName,
-                            onValueChange = { playerName = it.take(20) },
+                            onValueChange = {
+                                playerName = it.take(20)
+                            },
                             label = { Text("Enter your name") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             colors = neonFieldColors()
                         )
+
                         Spacer(Modifier.height(22.dp))
+
                         Text(
                             "CHOOSE YOUR TICKET BUNDLE",
                             color = NeonBlue,
                             fontWeight = FontWeight.Bold
                         )
+
                         Spacer(Modifier.height(12.dp))
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             listOf(1, 6, 12).forEach { size ->
                                 Button(
-                                    onClick = { bundleSize = size },
+                                    onClick = {
+                                        bundleSize = size
+                                    },
                                     modifier = Modifier.weight(1f),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (bundleSize == size) {
-                                            NeonPurple
-                                        } else {
-                                            Color(0xFF252C4A)
-                                        },
+                                        containerColor =
+                                            if (bundleSize == size) {
+                                                NeonPurple
+                                            } else {
+                                                Color(0xFF252C4A)
+                                            },
                                         contentColor = SoftWhite
                                     )
                                 ) {
@@ -170,7 +229,9 @@ fun HousieRoyaleApp() {
                                 }
                             }
                         }
+
                         Spacer(Modifier.height(22.dp))
+
                         NeonButton(
                             text = "🎮  PLAY OFFLINE",
                             color = NeonPurple,
@@ -178,7 +239,9 @@ fun HousieRoyaleApp() {
                         ) {
                             startNewGame(bundleSize)
                         }
+
                         Spacer(Modifier.height(12.dp))
+
                         NeonButton(
                             text = "🌐  PLAY ONLINE",
                             color = NeonBlue,
@@ -187,7 +250,9 @@ fun HousieRoyaleApp() {
                             screen = AppScreen.ONLINE
                         }
                     }
+
                     Spacer(Modifier.height(25.dp))
+
                     Text(
                         "✨ PLAY  •  WIN  •  CELEBRATE ✨",
                         color = NeonGold,
@@ -207,13 +272,16 @@ fun HousieRoyaleApp() {
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text("🌐", fontSize = 55.sp)
+
                     Text(
                         "ONLINE ROYALE",
                         color = NeonBlue,
                         fontSize = 27.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
+
                     Spacer(Modifier.height(25.dp))
+
                     NeonCard {
                         Text(
                             "CREATE OR JOIN A GAME",
@@ -221,7 +289,9 @@ fun HousieRoyaleApp() {
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         )
+
                         Spacer(Modifier.height(15.dp))
+
                         Text(
                             "Online multiplayer is not connected yet. " +
                                 "This screen is currently a placeholder.",
@@ -229,7 +299,9 @@ fun HousieRoyaleApp() {
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center
                         )
+
                         Spacer(Modifier.height(18.dp))
+
                         OutlinedTextField(
                             value = gameCode,
                             onValueChange = {
@@ -240,7 +312,9 @@ fun HousieRoyaleApp() {
                             modifier = Modifier.fillMaxWidth(),
                             colors = neonFieldColors()
                         )
+
                         Spacer(Modifier.height(20.dp))
+
                         NeonButton(
                             text = "← BACK TO HOME",
                             color = NeonPurple
@@ -259,6 +333,7 @@ fun HousieRoyaleApp() {
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -270,12 +345,23 @@ fun HousieRoyaleApp() {
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 20.sp
                         )
-                        TextButton(onClick = { screen = AppScreen.HOME }) {
+
+                        TextButton(
+                            onClick = {
+                                caller.stopAnnouncement()
+                                screen = AppScreen.HOME
+                            }
+                        ) {
                             Text("EXIT", color = NeonBlue)
                         }
                     }
 
-                    Text("Player: $playerName", color = SoftWhite, fontSize = 14.sp)
+                    Text(
+                        "Player: $playerName",
+                        color = SoftWhite,
+                        fontSize = 14.sp
+                    )
+
                     Spacer(Modifier.height(15.dp))
 
                     NeonCard {
@@ -285,34 +371,168 @@ fun HousieRoyaleApp() {
                             fontWeight = FontWeight.Bold,
                             fontSize = 17.sp
                         )
+
                         Spacer(Modifier.height(15.dp))
+
                         Text(
                             calledNumbers.lastOrNull()?.toString() ?: "--",
                             color = NeonGold,
                             fontSize = 65.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
+
                         Text(
                             "${calledNumbers.size} / 90 NUMBERS CALLED",
                             color = SoftWhite,
                             fontSize = 12.sp
                         )
+
                         Spacer(Modifier.height(18.dp))
+
                         NeonButton(
                             text = "🎲  CALL NEXT NUMBER",
                             color = NeonPurple,
                             enabled = calledNumbers.size < 90
                         ) {
-                            TambolaGameEngine.callNextNumber(calledNumbers.toSet())
-                                ?.let { calledNumbers.add(it) }
+                            TambolaGameEngine.callNextNumber(
+                                calledNumbers.toSet()
+                            )?.let { next ->
+                                calledNumbers.add(next)
+                                caller.announce(next, voiceEnabled)
+                            }
                         }
+
                         Spacer(Modifier.height(10.dp))
-                        NeonButton(text = "↻  NEW GAME", color = NeonBlue) {
+
+                        NeonButton(
+                            text = "↻  NEW GAME",
+                            color = NeonBlue
+                        ) {
                             startNewGame()
                         }
                     }
 
                     Spacer(Modifier.height(18.dp))
+
+                    NeonCard {
+                        Text(
+                            "SMART NUMBER CALLER",
+                            color = NeonGold,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Text(
+                            if (voiceReady) {
+                                "Voice engine ready"
+                            } else {
+                                "Preparing voice engine..."
+                            },
+                            color = if (voiceReady) NeonGreen else NeonBlue,
+                            fontSize = 12.sp
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "VOICE ANNOUNCEMENTS",
+                                color = SoftWhite,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+
+                            Switch(
+                                checked = voiceEnabled,
+                                onCheckedChange = {
+                                    voiceEnabled = it
+                                    if (!it) caller.stopAnnouncement()
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = NeonGold,
+                                    checkedTrackColor = NeonPurple
+                                )
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "SOUND EFFECTS",
+                                color = SoftWhite,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+
+                            Switch(
+                                checked = soundEnabled,
+                                onCheckedChange = {
+                                    soundEnabled = it
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = NeonGold,
+                                    checkedTrackColor = NeonPurple
+                                )
+                            )
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Text(
+                            "SPEAKING SPEED",
+                            color = NeonBlue,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+
+                        Slider(
+                            value = speechRate,
+                            onValueChange = {
+                                speechRate = it
+                            },
+                            valueRange = 0.5f..1.5f,
+                            steps = 3,
+                            colors = SliderDefaults.colors(
+                                thumbColor = NeonGold,
+                                activeTrackColor = NeonPurple,
+                                inactiveTrackColor = Color(0xFF343A5A)
+                            )
+                        )
+
+                        Text(
+                            when {
+                                speechRate < 0.8f -> "Slow"
+                                speechRate > 1.2f -> "Fast"
+                                else -> "Normal"
+                            },
+                            color = SoftWhite,
+                            fontSize = 12.sp
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        NeonButton(
+                            text = "🔊  TEST VOICE",
+                            color = NeonBlue,
+                            enabled = voiceReady && voiceEnabled
+                        ) {
+                            caller.announce(25, true)
+                        }
+                    }
+
+                    Spacer(Modifier.height(18.dp))
+
                     NeonCard {
                         Text(
                             "TICKET BUNDLE",
@@ -320,7 +540,9 @@ fun HousieRoyaleApp() {
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         )
+
                         Spacer(Modifier.height(12.dp))
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -328,15 +550,18 @@ fun HousieRoyaleApp() {
                             listOf(1, 6, 12).forEach { size ->
                                 Button(
                                     onClick = {
-                                        if (size != bundleSize) startNewGame(size)
+                                        if (size != bundleSize) {
+                                            startNewGame(size)
+                                        }
                                     },
                                     modifier = Modifier.weight(1f),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (bundleSize == size) {
-                                            NeonPurple
-                                        } else {
-                                            Color(0xFF252C4A)
-                                        },
+                                        containerColor =
+                                            if (bundleSize == size) {
+                                                NeonPurple
+                                            } else {
+                                                Color(0xFF252C4A)
+                                            },
                                         contentColor = SoftWhite
                                     )
                                 ) {
@@ -344,7 +569,9 @@ fun HousieRoyaleApp() {
                                 }
                             }
                         }
+
                         Spacer(Modifier.height(12.dp))
+
                         Text(
                             "$bundleSize TICKETS IN THIS GAME",
                             color = NeonBlue,
@@ -354,6 +581,7 @@ fun HousieRoyaleApp() {
                     }
 
                     Spacer(Modifier.height(18.dp))
+
                     NeonCard {
                         Text(
                             "YOUR ROYAL TAMBOLA TICKET",
@@ -361,13 +589,16 @@ fun HousieRoyaleApp() {
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         )
+
                         Spacer(Modifier.height(12.dp))
+
                         Text(
                             "TICKET ${selectedTicketIndex + 1} OF ${tickets.size}",
                             color = NeonBlue,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
+
                         Spacer(Modifier.height(12.dp))
 
                         currentTicket.forEach { row ->
@@ -376,41 +607,57 @@ fun HousieRoyaleApp() {
                                 horizontalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
                                 row.forEach { number ->
-                                    val wasCalled = number != null && number in calledNumbers
+                                    val wasCalled =
+                                        number != null && number in calledNumbers
+
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
                                             .aspectRatio(0.85f)
                                             .background(
-                                                if (wasCalled) NeonGreen else Color(0xFF252C4A),
+                                                if (wasCalled) {
+                                                    NeonGreen
+                                                } else {
+                                                    Color(0xFF252C4A)
+                                                },
                                                 RoundedCornerShape(5.dp)
                                             )
                                             .border(
                                                 1.dp,
-                                                if (wasCalled) NeonGreen
-                                                else NeonPurple.copy(alpha = 0.6f),
+                                                if (wasCalled) {
+                                                    NeonGreen
+                                                } else {
+                                                    NeonPurple.copy(alpha = 0.6f)
+                                                },
                                                 RoundedCornerShape(5.dp)
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             number?.toString() ?: "",
-                                            color = if (wasCalled) Background else SoftWhite,
+                                            color = if (wasCalled) {
+                                                Background
+                                            } else {
+                                                SoftWhite
+                                            },
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
                                 }
                             }
+
                             Spacer(Modifier.height(5.dp))
                         }
 
                         Spacer(Modifier.height(14.dp))
+
                         Text(
                             "Green = Number Called",
                             color = NeonGreen,
                             fontSize = 12.sp
                         )
+
                         Spacer(Modifier.height(15.dp))
 
                         Row(
@@ -419,13 +666,18 @@ fun HousieRoyaleApp() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedButton(
-                                onClick = { selectedTicketIndex-- },
+                                onClick = {
+                                    selectedTicketIndex--
+                                },
                                 enabled = selectedTicketIndex > 0
                             ) {
                                 Text("← PREVIOUS")
                             }
+
                             OutlinedButton(
-                                onClick = { selectedTicketIndex++ },
+                                onClick = {
+                                    selectedTicketIndex++
+                                },
                                 enabled = selectedTicketIndex < tickets.lastIndex
                             ) {
                                 Text("NEXT →")
@@ -433,6 +685,7 @@ fun HousieRoyaleApp() {
                         }
 
                         Spacer(Modifier.height(12.dp))
+
                         NeonButton(
                             text = if (selectedTicketIndex in favouriteTickets) {
                                 "★  REMOVE FAVOURITE"
@@ -443,6 +696,7 @@ fun HousieRoyaleApp() {
                         ) {
                             toggleFavourite()
                         }
+
                         NeonButton(
                             text = "★  NEXT FAVOURITE (${favouriteTickets.size})",
                             color = NeonBlue,
@@ -453,6 +707,7 @@ fun HousieRoyaleApp() {
                     }
 
                     Spacer(Modifier.height(18.dp))
+
                     NeonCard {
                         Text(
                             "WINNING CLAIMS",
@@ -460,7 +715,9 @@ fun HousieRoyaleApp() {
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         )
+
                         Spacer(Modifier.height(10.dp))
+
                         if (completedPatterns.isEmpty()) {
                             Text(
                                 "No winning pattern completed on this ticket yet.",
@@ -480,6 +737,7 @@ fun HousieRoyaleApp() {
                     }
 
                     Spacer(Modifier.height(18.dp))
+
                     NeonCard {
                         Text(
                             "CALLED NUMBER HISTORY",
@@ -487,9 +745,14 @@ fun HousieRoyaleApp() {
                             fontWeight = FontWeight.Bold,
                             fontSize = 17.sp
                         )
+
                         Spacer(Modifier.height(10.dp))
+
                         if (calledNumbers.isEmpty()) {
-                            Text("No numbers called yet.", color = SoftWhite)
+                            Text(
+                                "No numbers called yet.",
+                                color = SoftWhite
+                            )
                         } else {
                             Text(
                                 calledNumbers.joinToString("  •  "),
@@ -498,6 +761,7 @@ fun HousieRoyaleApp() {
                             )
                         }
                     }
+
                     Spacer(Modifier.height(24.dp))
                 }
             }
@@ -558,4 +822,3 @@ private fun neonFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedLabelColor = SoftWhite,
     cursorColor = NeonGold
 )
-
