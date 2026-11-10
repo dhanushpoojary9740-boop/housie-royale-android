@@ -1,3 +1,4 @@
+
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -15,8 +16,9 @@ android {
         applicationId = "com.houseroyale.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+
+        versionCode = 2
+        versionName = "2.0"
     }
 
     buildFeatures {
@@ -36,7 +38,6 @@ kotlin {
 }
 
 dependencies {
-
     implementation(platform(
         "androidx.compose:compose-bom:2025.11.00"
     ))
