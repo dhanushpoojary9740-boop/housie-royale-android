@@ -12,6 +12,11 @@ enum class WinningPattern {
     FULL_HOUSE
 }
 
+data class TicketWinningResult(
+    val ticketIndex: Int,
+    val completedPatterns: Set<WinningPattern>
+)
+
 object TambolaGameEngine {
 
     private const val ROWS = 3
@@ -142,6 +147,7 @@ object TambolaGameEngine {
         return true
     }
 
+    // Detect all completed patterns on one ticket.
     fun completedPatterns(
         ticket: TambolaTicket,
         calledNumbers: Set<Int>
@@ -198,15 +204,107 @@ object TambolaGameEngine {
         return completed
     }
 
+    // NEW: Detect winning patterns across every ticket in a bundle.
+    // The map key is the ticket index, starting from zero.
+    fun completedPatternsForAllTickets(
+        tickets: List<TambolaTicket>,
+        calledNumbers: Set<Int>
+    ): Map<Int, Set<WinningPattern>> {
+
+        require(tickets.isNotEmpty()) {
+            "At least one ticket is required"
+        }
+
+        return tickets.mapIndexedNotNull { index, ticket ->
+
+            val patterns = completedPatterns(ticket, calledNumbers)
+
+            if (patterns.isNotEmpty()) {
+                index to patterns
+            } else {
+                null
+            }
+
+        }.toMap()
+    }
+
+    // NEW: Return detailed winning results for every ticket.
+    fun getAllTicketWinningResults(
+        tickets: List<TambolaTicket>,
+        calledNumbers: Set<Int>
+    ): List<TicketWinningResult> {
+
+        return completedPatternsForAllTickets(
+            tickets,
+            calledNumbers
+        ).map { (index, patterns) ->
+
+            TicketWinningResult(
+                ticketIndex = index,
+                completedPatterns = patterns
+            )
+        }
+    }
+
+    // NEW: Find every ticket that has completed a particular pattern.
+    fun getWinningTickets(
+        tickets: List<TambolaTicket>,
+        calledNumbers: Set<Int>,
+        pattern: WinningPattern
+    ): List<Int> {
+
+        return completedPatternsForAllTickets(
+            tickets,
+            calledNumbers
+        ).filter { (_, patterns) ->
+            pattern in patterns
+        }.keys.sorted()
+    }
+
+    // NEW: Validate an individual winning claim.
+    fun validateWinningClaim(
+        ticket: TambolaTicket,
+        pattern: WinningPattern,
+        calledNumbers: Set<Int>
+    ): Boolean {
+
+        return pattern in completedPatterns(
+            ticket,
+            calledNumbers
+        )
+    }
+
+    // NEW: Validate a claim against a specific ticket in a bundle.
+    fun validateBundleClaim(
+        tickets: List<TambolaTicket>,
+        ticketIndex: Int,
+        pattern: WinningPattern,
+        calledNumbers: Set<Int>
+    ): Boolean {
+
+        val ticket = tickets.getOrNull(ticketIndex)
+            ?: return false
+
+        return validateWinningClaim(
+            ticket,
+            pattern,
+            calledNumbers
+        )
+    }
+
     fun getRemainingNumbers(
         calledNumbers: Set<Int>
     ): List<Int> {
-        return (1..90).filterNot { it in calledNumbers }
+
+        return (1..90).filterNot {
+            it in calledNumbers
+        }
     }
 
     fun callNextNumber(
         calledNumbers: Set<Int>
     ): Int? {
+
         return getRemainingNumbers(calledNumbers).randomOrNull()
     }
 }
